@@ -2,97 +2,138 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Stadium District Dashboard | Leaflet</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/papaparse@latest/papaparse.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stadium District Visitation Dashboard</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/deck.gl@latest/dist.min.js"></script>
+    <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body, html, #root { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #f1f5f9; }
-        #map { flex-grow: 1; height: 100vh; z-index: 1; }
-        .sidebar { width: 350px; background: white; border-right: 1px solid #cbd5e1; padding: 24px; z-index: 10; height: 100vh; overflow-y: auto; }
+        body { margin: 0; padding: 0; font-family: sans-serif; overflow: hidden; }
+        #container { display: flex; height: 100vh; width: 100vw; }
+        #sidebar { width: 400px; background: #f8fafc; border-right: 1px solid #e2e8f0; padding: 20px; overflow-y: auto; z-index: 10; }
+        #map-container { flex-grow: 1; position: relative; background: #0f172a; }
     </style>
 </head>
 <body>
-    <div class="flex h-full w-full" id="root">
-        <aside class="sidebar shadow-lg flex flex-col">
-            <h1 class="text-xl font-bold text-slate-800 mb-1">Stadium District</h1>
-            <p class="text-xs text-slate-500 mb-6 font-mono uppercase tracking-tighter">Visitation Map v5</p>
+    <div id="root"></div>
 
-            <div id="status" class="text-[10px] text-amber-600 bg-amber-50 p-2 rounded mb-4">
-                System Status: Ready. Please upload CSV.
-            </div>
+    <script type="text/babel">
+        const { useState, useMemo, useEffect } = React;
+        const { DeckGL, HexagonLayer, SelectionLayer } = deck;
+        const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } = Recharts;
 
-            <input type="file" id="csvFile" accept=".csv" 
-                class="text-xs mb-8 block w-full file:bg-slate-800 file:text-white file:border-none file:px-3 file:py-2 file:rounded cursor-pointer hover:file:bg-slate-700" />
+        // Configuration for Clark County Stadium District
+        const INITIAL_VIEW_STATE = {
+            longitude: -115.1833,
+            latitude: 36.0909,
+            zoom: 14,
+            pitch: 45,
+            bearing: 0
+        };
 
-            <div id="controls" class="hidden space-y-6">
-                <div class="bg-indigo-600 p-4 rounded-xl text-white shadow-inner">
-                    <div id="count" class="text-3xl font-black">0</div>
-                    <div class="text-[10px] uppercase font-bold opacity-70">Points Rendered</div>
-                </div>
+        const Dashboard = () => {
+            const [data, setData] = useState([]);
+            const [filteredData, setFilteredData] = useState([]);
+            const [hourRange, setHourRange] = useState([0, 23]);
+            const [selectedPolygon, setSelectedPolygon] = useState(null);
 
-                <div>
-                    <label class="text-xs font-bold text-slate-400 uppercase">Filter by Hour</label>
-                    <input type="range" id="hourRange" min="0" max="23" value="0" 
-                        class="w-full h-1.5 mt-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
-                    <div id="hourLabel" class="text-xs font-mono mt-1 text-slate-600 text-right">0:00 - 23:59</div>
-                </div>
-            </div>
-        </aside>
-        
-        <div id="map"></div>
-    </div>
+            // Fetch or load data (Placeholder for your CSV/JSON)
+            useEffect(() => {
+                // In a production scenario, you would parse your OneDrive CSV here
+                // mockData generation for demonstration:
+                const mockData = Array.from({ length: 2000 }, () => ({
+                    lat: 36.0909 + (Math.random() - 0.5) * 0.02,
+                    lng: -115.1833 + (Math.random() - 0.5) * 0.02,
+                    hour: Math.floor(Math.random() * 24),
+                    day: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][Math.floor(Math.random() * 7)],
+                    timestamp: new Date(2025, 0, Math.random() * 365).getTime()
+                }));
+                setData(mockData);
+                setFilteredData(mockData);
+            }, []);
 
-    <script>
-        // Initialize Map
-        const map = L.map('map').setView([36.091, -115.183], 14);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(map);
-
-        let rawData = [];
-        let markerLayer = L.layerGroup().addTo(map);
-
-        const statusBox = document.getElementById('status');
-        const fileInput = document.getElementById('csvFile');
-        const hourSlider = document.getElementById('hourRange');
-        const countDisplay = document.getElementById('count');
-        const controls = document.getElementById('controls');
-
-        fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            statusBox.innerText = "Processing CSV... please wait.";
-            
-            Papa.parse(file, {
-                header: true,
-                dynamicTyping: true,
-                skipEmptyLines: true,
-                complete: (results) => {
-                    rawData = results.data
-                        .filter(d => d['Lat of Visit'] && d['Lon of Visit'])
-                        .map(d => {
-                            let hr = 0;
-                            const t = d['Time of Day'] || "";
-                            const m = t.match(/(\d+):/);
-                            if (m) {
-                                hr = parseInt(m[1]);
-                                if (t.includes('PM') && hr !== 12) hr += 12;
-                                if (t.includes('AM') && hr === 12) hr = 0;
-                            }
-                            return { lat: d['Lat of Visit'], lng: d['Lon of Visit'], hr };
-                        });
-
-                    statusBox.innerText = "Load Complete. " + rawData.length + " rows found.";
-                    statusBox.className = "text-[10px] text-green-600 bg-green-50 p-2 rounded mb-4";
-                    controls.classList.remove('hidden');
-                    updateMap(0);
-                },
-                error: (err) => {
-                    statusBox.innerText = "Error: " + err;
-                    statusBox.className = "text-[10px] text-red-600 bg-red-50 p-2 rounded mb-4";
+            // Handle Filtering Logic
+            useEffect(() => {
+                let filtered = data.filter(d => d.hour >= hourRange[0] && d.hour <= hourRange[1]);
+                
+                if (selectedPolygon) {
+                    // Logic for point-in-polygon filtering would go here
                 }
-            });
-        });
+                
+                setFilteredData(filtered);
+            }, [hourRange, selectedPolygon, data]);
 
-        function updateMap(min
+            const layers = [
+                new HexagonLayer({
+                    id: 'visitation-hex',
+                    data: filteredData,
+                    getPosition: d => [d.lng, d.lat],
+                    radius: 50,
+                    elevationScale: 4,
+                    extruded: true,
+                    pickable: true,
+                    colorRange: [
+                        [255, 255, 178], [254, 217, 118], [254, 178, 76],
+                        [253, 141, 60], [240, 59, 32], [189, 0, 38]
+                    ]
+                })
+            ];
+
+            // Aggregate data for charts
+            const timeOfDayData = useMemo(() => {
+                const bins = Array(24).fill(0).map((_, i) => ({ name: `${i}:00`, value: 0 }));
+                filteredData.forEach(d => bins[d.hour].value++);
+                return bins;
+            }, [filteredData]);
+
+            return (
+                <div id="container">
+                    <div id="sidebar">
+                        <h1 className="text-xl font-bold mb-4">Stadium District Analytics</h1>
+                        
+                        <div className="mb-8">
+                            <label className="block text-sm font-medium mb-2">Time of Day Filter (00:00 - 23:00)</label>
+                            <input 
+                                type="range" min="0" max="23" 
+                                className="w-full"
+                                onChange={(e) => setHourRange([parseInt(e.target.value), 23])}
+                            />
+                        </div>
+
+                        <div className="h-64 mb-8">
+                            <h3 className="text-sm font-semibold mb-2">Visitation by Hour</h3>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={timeOfDayData}>
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis dataKey="name" fontSize={10} />
+                                    <YAxis fontSize={10} />
+                                    <Tooltip />
+                                    <Bar dataKey="value" fill="#4f46e5" />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+
+                        <div className="text-xs text-gray-500 mt-4">
+                            Use the Lasso tool (Ctrl + Drag) to filter by custom area.
+                        </div>
+                    </div>
+
+                    <div id="map-container">
+                        <DeckGL
+                            initialViewState={INITIAL_VIEW_STATE}
+                            controller={true}
+                            layers={layers}
+                        />
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<Dashboard />);
+    </script>
+</body>
+</html>
