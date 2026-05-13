@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Stadium District Dashboard | Leaflet</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/papaparse@latest/papaparse.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body, html, #root { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #f1f5f9; }
+        #map { flex-grow: 1; height: 100vh; z-index: 1; }
+        .sidebar { width: 350px; background: white; border-right: 1px solid #cbd5e1; padding: 24px; z-index: 10; height: 100vh; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <div class="flex h-full w-full" id="root">
+        <aside class="sidebar shadow-lg flex flex-col">
+            <h1 class="text-xl font-bold text-slate-800 mb-1">Stadium District</h1>
+            <p class="text-xs text-slate-500 mb-6 font-mono uppercase tracking-tighter">Visitation Map v5</p>
+
+            <div id="status" class="text-[10px] text-amber-600 bg-amber-50 p-2 rounded mb-4">
+                System Status: Ready. Please upload CSV.
+            </div>
+
+            <input type="file" id="csvFile" accept=".csv" 
+                class="text-xs mb-8 block w-full file:bg-slate-800 file:text-white file:border-none file:px-3 file:py-2 file:rounded cursor-pointer hover:file:bg-slate-700" />
+
+            <div id="controls" class="hidden space-y-6">
+                <div class="bg-indigo-600 p-4 rounded-xl text-white shadow-inner">
+                    <div id="count" class="text-3xl font-black">0</div>
+                    <div class="text-[10px] uppercase font-bold opacity-70">Points Rendered</div>
+                </div>
+
+                <div>
+                    <label class="text-xs font-bold text-slate-400 uppercase">Filter by Hour</label>
+                    <input type="range" id="hourRange" min="0" max="23" value="0" 
+                        class="w-full h-1.5 mt-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                    <div id="hourLabel" class="text-xs font-mono mt-1 text-slate-600 text-right">0:00 - 23:59</div>
+                </div>
+            </div>
+        </aside>
+        
+        <div id="map"></div>
+    </div>
+
+    <script>
+        // Initialize Map
+        const map = L.map('map').setView([36.091, -115.183], 14);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        let rawData = [];
+        let markerLayer = L.layerGroup().addTo(map);
+
+        const statusBox = document.getElementById('status');
+        const fileInput = document.getElementById('csvFile');
+        const hourSlider = document.getElementById('hourRange');
+        const countDisplay = document.getElementById('count');
+        const controls = document.getElementById('controls');
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            statusBox.innerText = "Processing CSV... please wait.";
+            
+            Papa.parse(file, {
+                header: true,
+                dynamicTyping: true,
+                skipEmptyLines: true,
+                complete: (results) => {
+                    rawData = results.data
+                        .filter(d => d['Lat of Visit'] && d['Lon of Visit'])
+                        .map(d => {
+                            let hr = 0;
+                            const t = d['Time of Day'] || "";
+                            const m = t.match(/(\d+):/);
+                            if (m) {
+                                hr = parseInt(m[1]);
+                                if (t.includes('PM') && hr !== 12) hr += 12;
+                                if (t.includes('AM') && hr === 12) hr = 0;
+                            }
+                            return { lat: d['Lat of Visit'], lng: d['Lon of Visit'], hr };
+                        });
+
+                    statusBox.innerText = "Load Complete. " + rawData.length + " rows found.";
+                    statusBox.className = "text-[10px] text-green-600 bg-green-50 p-2 rounded mb-4";
+                    controls.classList.remove('hidden');
+                    updateMap(0);
+                },
+                error: (err) => {
+                    statusBox.innerText = "Error: " + err;
+                    statusBox.className = "text-[10px] text-red-600 bg-red-50 p-2 rounded mb-4";
+                }
+            });
+        });
+
+        function updateMap(min
