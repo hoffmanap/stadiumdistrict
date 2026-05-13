@@ -2,175 +2,144 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Stadium District | Advanced Analytics</title>
-    
+    <title>Stadium District | Hexbin Analytics</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
     <script src="https://unpkg.com/@asymmetrik/leaflet-d3@6.0.0/dist/leaflet-d3.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; background: #0f172a; color: white; }
+        body, html { margin: 0; padding: 0; height: 100%; background: #0f172a; }
         #main { display: flex; height: 100vh; width: 100vw; }
-        #sidebar { width: 380px; background: #1e293b; border-right: 1px solid #334155; padding: 24px; z-index: 1000; overflow-y: auto; box-shadow: 10px 0 15px rgba(0,0,0,0.3); }
+        #sidebar { width: 360px; background: #1e293b; border-right: 1px solid #334155; padding: 20px; z-index: 1000; overflow-y: auto; }
         #map { flex-grow: 1; z-index: 1; }
-        
-        /* Custom range slider styling */
-        input[type=range] { height: 6px; -webkit-appearance: none; background: #334155; border-radius: 5px; outline: none; }
-        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; background: #6366f1; border-radius: 50%; cursor: pointer; border: 2px solid white; }
+        input[type=range] { width: 100%; height: 6px; background: #334155; border-radius: 5px; appearance: none; outline: none; }
+        input[type=range]::-webkit-slider-thumb { appearance: none; width: 16px; height: 16px; background: #6366f1; border-radius: 50%; cursor: pointer; border: 2px solid #fff; }
     </style>
 </head>
 <body>
-
     <div id="main">
-        <aside id="sidebar">
-            <h1 class="text-2xl font-black tracking-tight text-white mb-1">STADIUM DISTRICT</h1>
-            <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-8">Spatial Heatmap Analytics</p>
-
-            <div class="mb-8 p-4 bg-slate-800 rounded-xl border border-slate-700">
-                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Dataset Upload</label>
-                <input type="file" id="csv-input" accept=".csv" class="text-xs w-full cursor-pointer file:mr-3 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500" />
+        <aside id="sidebar" class="flex flex-col gap-6">
+            <div>
+                <h1 class="text-xl font-black text-white italic">STADIUM ANALYTICS</h1>
+                <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Hexbin Heatmap v6</p>
             </div>
 
-            <div id="controls" class="hidden space-y-8">
-                <div class="bg-gradient-to-br from-indigo-600 to-violet-700 p-5 rounded-2xl shadow-lg">
-                    <div id="vis-count" class="text-4xl font-black">0</div>
-                    <div class="text-[10px] font-bold opacity-70 uppercase tracking-widest">Aggregate Records</div>
+            <div class="p-4 bg-slate-800 rounded-lg border border-slate-700">
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Upload Data</label>
+                <input type="file" id="csv-input" accept=".csv" class="text-xs text-slate-400 file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-indigo-600 file:text-white" />
+            </div>
+
+            <div id="controls" class="space-y-6">
+                <div class="bg-indigo-900/50 border border-indigo-500/30 p-4 rounded-xl">
+                    <div id="vis-count" class="text-3xl font-black text-white">0</div>
+                    <div class="text-[10px] font-bold text-indigo-300 uppercase tracking-widest">Points in Range</div>
                 </div>
 
                 <div>
-                    <div class="flex justify-between items-center mb-3">
-                        <label class="text-xs font-bold text-slate-400 uppercase tracking-wider">Time Range</label>
-                        <span id="time-label" class="text-xs font-mono bg-slate-700 px-2 py-1 rounded text-indigo-300">00:00 - 23:59</span>
+                    <div class="flex justify-between text-[10px] font-bold text-slate-500 uppercase mb-2">
+                        <span>Time Range</span>
+                        <span id="time-label" class="text-indigo-400">0:00 - 23:59</span>
                     </div>
-                    <div class="space-y-4">
-                        <input type="range" id="start-hour" min="0" max="23" value="0" class="w-full">
-                        <input type="range" id="end-hour" min="0" max="23" value="23" class="w-full">
-                    </div>
+                    <input type="range" id="start-h" min="0" max="23" value="0" class="mb-2">
+                    <input type="range" id="end-h" min="0" max="23" value="23">
                 </div>
 
                 <div>
-                    <label class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">Days of Week</label>
-                    <div class="grid grid-cols-4 gap-2" id="day-filters">
-                        </div>
+                    <label class="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Day Filters</label>
+                    <div class="grid grid-cols-4 gap-2" id="day-grid"></div>
                 </div>
 
-                <div class="pt-6 border-t border-slate-700">
-                    <div class="flex items-center gap-2 mb-4 text-[10px] font-bold text-slate-500 uppercase">
-                        <span>Intensity Scale</span>
-                    </div>
-                    <div class="h-3 w-full rounded-full bg-gradient-to-r from-blue-500 via-yellow-400 to-red-600"></div>
-                    <div class="flex justify-between text-[10px] mt-1 text-slate-500 font-mono">
-                        <span>LOW</span>
-                        <span>HIGH</span>
+                <div class="pt-4 border-t border-slate-700">
+                    <div class="h-2 w-full rounded bg-gradient-to-r from-blue-500 via-yellow-400 to-red-600 mb-1"></div>
+                    <div class="flex justify-between text-[9px] text-slate-500 font-bold uppercase">
+                        <span>Low Activity</span>
+                        <span>Hotspot</span>
                     </div>
                 </div>
             </div>
         </aside>
-
         <div id="map"></div>
     </div>
 
     <script>
-        // 1. UPDATED BASEMAP: Using CartoDB Voyager (Dark with labels and clean colors)
+        // Initialize Map
         const map = L.map('map', { zoomControl: false }).setView([36.091, -115.183], 14);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; CartoDB'
+            attribution: 'CartoDB'
         }).addTo(map);
 
-        // 2. HEXBIN CONFIGURATION
-        const hexLayer = L.hexbinLayer({
-            radius: 12, // Small hex size for detailed hotspots
-            opacity: 0.7,
-            duration: 200
-        });
-
-        // Blue to Red Color Scale
-        hexLayer.colorScale().range(['#3b82f6', '#facc15', '#ef4444']); 
+        // Configure Hexbin
+        const hexLayer = L.hexbinLayer({ radius: 12, opacity: 0.8 });
+        hexLayer.colorScale().range(['#3b82f6', '#facc15', '#ef4444']);
         hexLayer.addTo(map);
 
-        let masterData = [];
+        let rawData = [];
         let activeDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-        // UI Element Selectors
-        const input = document.getElementById('csv-input');
-        const countLabel = document.getElementById('vis-count');
-        const timeLabel = document.getElementById('time-label');
-        const startSlider = document.getElementById('start-hour');
-        const endSlider = document.getElementById('end-hour');
-
-        // Generate Day Buttons
-        const dayContainer = document.getElementById('day-filters');
+        // Build Day Buttons
+        const grid = document.getElementById('day-grid');
         activeDays.forEach(day => {
-            const btn = document.createElement('button');
-            btn.innerText = day;
-            btn.id = `btn-${day}`;
-            btn.className = 'px-2 py-2 text-[10px] font-bold rounded-lg transition-all bg-indigo-600 text-white shadow-md';
-            btn.onclick = () => toggleDay(day);
-            dayContainer.appendChild(btn);
+            const b = document.createElement('button');
+            b.innerText = day;
+            b.id = 'btn-' + day;
+            b.className = 'py-1 text-[10px] font-bold rounded bg-indigo-600 text-white border border-indigo-400';
+            b.onclick = () => {
+                if (activeDays.includes(day)) {
+                    activeDays = activeDays.filter(d => d !== day);
+                    b.className = 'py-1 text-[10px] font-bold rounded bg-slate-700 text-slate-400 border border-slate-600';
+                } else {
+                    activeDays.push(day);
+                    b.className = 'py-1 text-[10px] font-bold rounded bg-indigo-600 text-white border border-indigo-400';
+                }
+                update();
+            };
+            grid.appendChild(b);
         });
 
-        function toggleDay(day) {
-            const idx = activeDays.indexOf(day);
-            const btn = document.getElementById(`btn-${day}`);
-            if (idx > -1) {
-                activeDays.splice(idx, 1);
-                btn.className = 'px-2 py-2 text-[10px] font-bold rounded-lg bg-slate-700 text-slate-400';
-            } else {
-                activeDays.push(day);
-                btn.className = 'px-2 py-2 text-[10px] font-bold rounded-lg bg-indigo-600 text-white shadow-md';
-            }
-            applyFilters();
-        }
-
-        input.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            Papa.parse(file, {
+        document.getElementById('csv-input').onchange = (e) => {
+            Papa.parse(e.target.files[0], {
                 header: true,
                 dynamicTyping: true,
-                complete: (results) => {
-                    masterData = results.data
-                        .filter(r => r['Lat of Visit'] && r['Lon of Visit'])
-                        .map(r => {
-                            let h = 0;
-                            const t = r['Time of Day'] || "";
-                            const m = t.match(/(\d+):/);
-                            if (m) {
-                                h = parseInt(m[1]);
-                                if (t.includes('PM') && h !== 12) h += 12;
-                                if (t.includes('AM') && h === 12) h = 0;
-                            }
-                            return [r['Lon of Visit'], r['Lat of Visit'], h, r['Day of Week']];
-                        });
-                    document.getElementById('controls').classList.remove('hidden');
-                    applyFilters();
+                complete: (res) => {
+                    // Normalize headers to remove potential spaces
+                    rawData = res.data.map(r => {
+                        const clean = {};
+                        Object.keys(r).forEach(k => clean[k.trim()] = r[k]);
+                        
+                        let hr = 0;
+                        const t = clean['Time of Day'] || "";
+                        const m = t.match(/(\d+):/);
+                        if (m) {
+                            hr = parseInt(m[1]);
+                            if (t.includes('PM') && hr !== 12) hr += 12;
+                            if (t.includes('AM') && hr === 12) hr = 0;
+                        }
+                        return { lat: clean['Lat of Visit'], lng: clean['Lon of Visit'], hr, day: clean['Day of Week'] };
+                    }).filter(r => r.lat && r.lng);
+                    update();
                 }
             });
-        });
+        };
 
-        function applyFilters() {
-            const start = parseInt(startSlider.value);
-            const end = parseInt(endSlider.value);
-            
-            // Ensure bi-directional logic works
-            const minH = Math.min(start, end);
-            const maxH = Math.max(start, end);
+        function update() {
+            const s = parseInt(document.getElementById('start-h').value);
+            const e = parseInt(document.getElementById('end-h').value);
+            const min = Math.min(s, e);
+            const max = Math.max(s, e);
 
-            const filtered = masterData.filter(d => 
-                d[2] >= minH && d[2] <= maxH && activeDays.includes(d[3])
+            const filtered = rawData.filter(d => 
+                d.hr >= min && d.hr <= max && activeDays.includes(d.day)
             );
 
-            // Hexlayer expects data in [lng, lat] format via the d3 data method
-            hexLayer.data(filtered.map(d => [d[0], d[1]]));
-            
-            countLabel.innerText = filtered.length.toLocaleString();
-            timeLabel.innerText = `${minH}:00 - ${maxH}:59`;
+            hexLayer.data(filtered.map(d => [d.lng, d.lat]));
+            document.getElementById('vis-count').innerText = filtered.length.toLocaleString();
+            document.getElementById('time-label').innerText = min + ":00 - " + max + ":59";
         }
 
-        [startSlider, endSlider].forEach(s => s.addEventListener('input', applyFilters));
-
+        document.getElementById('start-h').oninput = update;
+        document.getElementById('end-h').oninput = update;
     </script>
 </body>
 </html>
