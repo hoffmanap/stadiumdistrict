@@ -2,58 +2,53 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Stadium District Hotspot Tool</title>
+    <title>Stadium District | High-Res Grid</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #0f172a; }
+        body, html { margin: 0; padding: 0; height: 100%; background: #0f172a; }
         #main { display: flex; height: 100vh; width: 100vw; }
-        #sidebar { width: 340px; background: #1e293b; border-right: 1px solid #334155; padding: 20px; z-index: 1000; overflow-y: auto; color: white; }
+        #sidebar { width: 340px; background: #111827; border-right: 1px solid #374151; padding: 20px; z-index: 1000; overflow-y: auto; color: white; }
         #map { flex-grow: 1; z-index: 1; }
-        input[type=range] { width: 100%; height: 6px; background: #334155; border-radius: 5px; appearance: none; outline: none; }
-        input[type=range]::-webkit-slider-thumb { appearance: none; width: 16px; height: 16px; background: #6366f1; border-radius: 50%; cursor: pointer; border: 2px solid #fff; }
+        .legend { background: rgba(17, 24, 39, 0.9); padding: 12px; border-radius: 8px; border: 1px solid #374151; color: white; line-height: 1.5; font-family: sans-serif; font-size: 10px; pointer-events: none; }
+        .legend i { width: 12px; height: 12px; float: left; margin-right: 8px; opacity: 0.8; border-radius: 2px; }
+        input[type=range] { width: 100%; height: 4px; background: #374151; border-radius: 2px; appearance: none; outline: none; }
+        input[type=range]::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; background: #6366f1; border-radius: 50%; cursor: pointer; }
     </style>
 </head>
 <body>
     <div id="main">
         <aside id="sidebar">
             <h1 class="text-xl font-black mb-1 italic">STADIUM ANALYTICS</h1>
-            <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-6">Internal Hotspot Tool</p>
+            <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-8">Grid Aggregation Tool</p>
 
-            <div class="mb-6 p-4 bg-slate-800 rounded-lg border border-slate-700">
-                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Upload Data</label>
-                <input type="file" id="csv-input" accept=".csv" class="text-xs w-full cursor-pointer file:bg-indigo-600 file:text-white file:border-0 file:px-2 file:py-1 file:rounded" />
+            <div class="mb-8 p-4 bg-gray-800 rounded-xl border border-gray-700">
+                <label class="block text-[10px] font-bold text-gray-500 uppercase mb-2">Upload September CSV</label>
+                <input type="file" id="csv-input" accept=".csv" class="text-xs w-full file:bg-indigo-600 file:text-white file:border-0 file:px-3 file:py-1 file:rounded-md cursor-pointer" />
             </div>
 
-            <div id="controls-panel" class="space-y-6">
-                <div class="bg-indigo-900/40 p-4 rounded-xl border border-indigo-500/30">
-                    <div id="vis-count" class="text-3xl font-black">0</div>
-                    <div class="text-[10px] font-bold text-indigo-300 uppercase">Filtered Records</div>
-                </div>
-
-                <div class="space-y-4">
-                    <div>
-                        <div class="flex justify-between text-[10px] font-bold text-slate-400 uppercase mb-2">
-                            <span>Time: <span id="time-label" class="text-white">0:00 - 23:59</span></span>
-                        </div>
-                        <input type="range" id="start-h" min="0" max="23" value="0" class="mb-2">
+            <div class="space-y-8">
+                <div>
+                    <div class="flex justify-between text-[10px] font-bold text-gray-400 uppercase mb-3">
+                        <span>Time Window</span>
+                        <span id="time-label" class="text-indigo-400">0:00 - 23:59</span>
+                    </div>
+                    <div class="space-y-4">
+                        <input type="range" id="start-h" min="0" max="23" value="0">
                         <input type="range" id="end-h" min="0" max="23" value="23">
                     </div>
-
-                    <div>
-                        <label class="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Day Filter</label>
-                        <div class="grid grid-cols-4 gap-1" id="day-grid"></div>
-                    </div>
                 </div>
 
-                <div class="pt-4 border-t border-slate-700">
-                    <div class="h-2 w-full rounded bg-gradient-to-r from-blue-500 via-yellow-400 to-red-600 mb-1"></div>
-                    <div class="flex justify-between text-[9px] text-slate-500 font-bold uppercase">
-                        <span>Low</span>
-                        <span>Hotspot</span>
-                    </div>
+                <div>
+                    <label class="text-[10px] font-bold text-gray-400 uppercase mb-3 block">Day Filter</label>
+                    <div class="grid grid-cols-4 gap-1" id="day-grid"></div>
+                </div>
+
+                <div class="bg-gray-900/50 p-4 rounded-xl border border-gray-700">
+                    <div id="vis-count" class="text-2xl font-mono font-bold text-white">0</div>
+                    <div class="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Points Aggregated</div>
                 </div>
             </div>
         </aside>
@@ -61,29 +56,42 @@
     </div>
 
     <script>
-        const map = L.map('map', { zoomControl: false }).setView([36.091, -115.183], 14);
+        const map = L.map('map', { zoomControl: false }).setView([36.091, -115.183], 15);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png', {
             attribution: 'CartoDB'
         }).addTo(map);
 
         let rawData = [];
         let activeDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        let overlayLayer = L.layerGroup().addTo(map);
+        let gridLayer = L.layerGroup().addTo(map);
 
-        // Build Day Buttons
+        // Multi-stop Color Palette (Blue -> Yellow -> Red)
+        const colors = ['#313695', '#4575b4', '#74add1', '#abd9e9', '#ffffbf', '#fee090', '#fdae61', '#f46d43', '#d73027', '#a50026'];
+
+        const legend = L.control({position: 'bottomright'});
+        legend.onAdd = function () {
+            const div = L.DomUtil.create('div', 'legend');
+            div.innerHTML = '<b class="uppercase tracking-widest mb-2 block">Visitation Intensity</b>';
+            const labels = ['Low', '', '', '', '', '', '', '', '', 'High'];
+            for (let i = 0; i < colors.length; i++) {
+                div.innerHTML += `<i style="background:${colors[i]}"></i> ${labels[i]}<br>`;
+            }
+            return div;
+        };
+        legend.addTo(map);
+
         const grid = document.getElementById('day-grid');
         activeDays.forEach(day => {
             const b = document.createElement('button');
-            b.innerText = day;
-            b.id = 'btn-' + day;
-            b.className = 'py-1 text-[9px] font-bold rounded bg-indigo-600 text-white transition';
+            b.innerText = day; b.id = 'btn-' + day;
+            b.className = 'py-2 text-[9px] font-bold rounded bg-indigo-600 text-white transition';
             b.onclick = () => {
                 if (activeDays.includes(day)) {
                     activeDays = activeDays.filter(d => d !== day);
-                    b.className = 'py-1 text-[9px] font-bold rounded bg-slate-700 text-slate-500';
+                    b.className = 'py-2 text-[9px] font-bold rounded bg-gray-800 text-gray-500';
                 } else {
                     activeDays.push(day);
-                    b.className = 'py-1 text-[9px] font-bold rounded bg-indigo-600 text-white';
+                    b.className = 'py-2 text-[9px] font-bold rounded bg-indigo-600 text-white';
                 }
                 render();
             };
@@ -92,19 +100,11 @@
 
         document.getElementById('csv-input').onchange = (e) => {
             Papa.parse(e.target.files[0], {
-                header: true,
-                dynamicTyping: true,
-                skipEmptyLines: true,
+                header: true, dynamicTyping: true, skipEmptyLines: true,
                 complete: (res) => {
                     rawData = res.data.map(r => {
-                        // FIX: Aggressive Header Cleaning
                         const clean = {};
-                        Object.keys(r).forEach(k => {
-                            const cleanKey = k.trim().replace(/[^\x20-\x7E]/g, ''); 
-                            clean[cleanKey] = r[k];
-                        });
-
-                        // Extract Hour (handling AM/PM)
+                        Object.keys(r).forEach(k => clean[k.trim()] = r[k]);
                         let hr = 0;
                         const tStr = String(clean['Time of Day'] || "");
                         const match = tStr.match(/(\d+):/);
@@ -113,13 +113,7 @@
                             if (tStr.toUpperCase().includes('PM') && hr !== 12) hr += 12;
                             if (tStr.toUpperCase().includes('AM') && hr === 12) hr = 0;
                         }
-                        
-                        return { 
-                            lat: clean['Lat of Visit'], 
-                            lng: clean['Lon of Visit'], 
-                            hr: hr, 
-                            day: String(clean['Day of Week']).trim() 
-                        };
+                        return { lat: clean['Lat of Visit'], lng: clean['Lon of Visit'], hr, day: String(clean['Day of Week']).trim() };
                     }).filter(r => r.lat && r.lng);
                     render();
                 }
@@ -127,46 +121,46 @@
         };
 
         function render() {
-            overlayLayer.clearLayers();
+            gridLayer.clearLayers();
             const start = parseInt(document.getElementById('start-h').value);
             const end = parseInt(document.getElementById('end-h').value);
             const minH = Math.min(start, end);
             const maxH = Math.max(start, end);
 
-            const filtered = rawData.filter(d => 
-                d.hr >= minH && d.hr <= maxH && activeDays.includes(d.day)
-            );
-
+            const filtered = rawData.filter(d => d.hr >= minH && d.hr <= maxH && activeDays.includes(d.day));
             document.getElementById('vis-count').innerText = filtered.length.toLocaleString();
             document.getElementById('time-label').innerText = `${minH}:00 - ${maxH}:59`;
 
             if (filtered.length === 0) return;
 
-            // Manual Hex-like Grid Aggregation
+            // Square Grid Aggregation (Snapping)
             const bins = {};
-            const res = 0.001; // Grid resolution (approx 100m)
+            const res = 0.0004; // High-res grid size (approx 40-50m)
             
             filtered.forEach(p => {
-                const qx = Math.round(p.lng / res) * res;
-                const qy = Math.round(p.lat / res) * res;
+                const qx = Math.floor(p.lng / res) * res;
+                const qy = Math.floor(p.lat / res) * res;
                 const key = `${qx},${qy}`;
                 if (!bins[key]) bins[key] = { count: 0, lat: qy, lng: qx };
                 bins[key].count++;
             });
 
-            const maxC = Math.max(...Object.values(bins).map(b => b.count));
+            const counts = Object.values(bins).map(b => b.count).sort((a, b) => a - b);
+            const maxC = counts[counts.length - 1];
 
             Object.values(bins).forEach(b => {
-                const ratio = b.count / maxC;
-                const color = ratio < 0.3 ? '#3b82f6' : (ratio < 0.7 ? '#facc15' : '#ef4444');
+                // Determine color index (0-9)
+                const colorIdx = Math.min(Math.floor((b.count / maxC) * colors.length), colors.length - 1);
                 
-                L.circleMarker([b.lat, b.lng], {
-                    radius: 7,
-                    fillColor: color,
+                // Draw square bounds
+                const bounds = [[b.lat, b.lng], [b.lat + res, b.lng + res]];
+                
+                L.rectangle(bounds, {
+                    fillColor: colors[colorIdx],
                     color: '#fff',
-                    weight: 0.5,
-                    fillOpacity: 0.6
-                }).addTo(overlayLayer);
+                    weight: 0.2, // Thin grid lines
+                    fillOpacity: 0.7
+                }).addTo(gridLayer);
             });
         }
 
