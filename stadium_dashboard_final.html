@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stadium District Visitation Dashboard</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-draw/1.0.4/leaflet.draw.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/papaparse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/turf.js/6/turf.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet-draw/1.0.4/leaflet.draw.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        @import url('https://fonts.googleapis.com/css2?family=Spline+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Spline Sans', sans-serif;
+            background: linear-gradient(135deg, #0f1419 0%, #1a1f2e 100%);
+            color: #e0e6ed;
+            overflow: hidden;
+        }
+
+        .dashboard {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: #0f1419;
+        }
+
+        .header {
+            background: linear-gradient(90deg, #1a1f2e 0%, #2d3748 100%);
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            z-index: 100;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #00d4ff 0%, #0099ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+            letter-spacing: -1px;
+        }
+
+        .header p {
+            font-size: 0.9rem;
+            color: #a0a7b8;
+        }
+
+        .file-input-wrapper {
+            display: inline-block;
+            margin-left: 2rem;
+            padding-top: 0.5rem;
+        }
+
+        .file-input-wrapper input[type="file"] {
+            padding: 0.5rem 1rem;
+            background: rgba(0, 212, 255, 0.1);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            border-radius: 6px;
+            color: #e0e6ed;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            gap: 1rem;
+            padding: 1rem;
+        }
+
+        .left-panel {
+            width: 65%;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .right-panel {
+            width: 35%;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            overflow-y: auto;
+            padding-right: 0.5rem;
+        }
+
+        .right-panel::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .right-panel::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+
+        .right-panel::-webkit-scrollbar-thumb {
+            background: rgba(0, 212, 255, 0.3);
+            border-radius: 4px;
+        }
+
+        .right-panel::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 212, 255, 0.6);
+        }
+
+        .card {
+            background: rgba(42, 50, 64, 0.5);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #00d4ff;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 0.85rem;
+        }
+
+        .map-container {
+            flex: 1;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid rgba(0, 212, 255, 0.2);
+        }
+
+        .map-container #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        .charts-container {
+            display: flex;
+            gap: 1rem;
+            flex: 0.8;
+        }
+
+        .chart-card {
+            flex: 1;
+            background: rgba(42, 50, 64, 0.5);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-card canvas {
+            flex: 1;
+            min-height: 0;
+        }
+
+        .filters-section {
+            background: rgba(42, 50, 64, 0.5);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .filter-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .filter-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .filter-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #00d4ff;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 0.8rem;
+            display: block;
+        }
+
+        .filter-value {
+            font-size: 0.9rem;
+            color: #a0a7b8;
+            margin-top: 0.3rem;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(0, 212, 255, 0.1);
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #00d4ff 0%, #0099ff 100%);
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.6);
+            border: 2px solid rgba(15, 20, 25, 1);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #00d4ff 0%, #0099ff 100%);
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.6);
+            border: 2px solid rgba(15, 20, 25, 1);
+        }
+
+        .stats-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .stat-box {
+            background: rgba(0, 212, 255, 0.05);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #00d4ff;
+            font-family: 'Space Mono', monospace;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: #a0a7b8;
+            margin-top: 0.3rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .loading-message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(42, 50, 64, 0.95);
+            border: 1px solid rgba(0, 212, 255, 0.4);
+            padding: 2rem 3rem;
+            border-radius: 12px;
+            text-align: center;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(0, 212, 255, 0.2);
+            border-top: 3px solid #00d4ff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .reset-button {
+            background: linear-gradient(135deg, #ff6b35 0%, #ff4500 100%);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.3s ease;
+            margin-top: 1rem;
+            width: 100%;
+        }
+
+        .reset-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4);
+        }
+
+        .tool-info {
+            font-size: 0.8rem;
+            color: #a0a7b8;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(0, 212, 255, 0.1);
+            line-height: 1.6;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 2rem;
+            color: #a0a7b8;
+        }
+
+        .leaflet-control-draw-toolbar {
+            background: rgba(42, 50, 64, 0.9) !important;
+            border-radius: 8px !important;
+        }
+
+        .leaflet-draw-toolbar a {
+            background-color: rgba(0, 212, 255, 0.1) !important;
+            border-color: rgba(0, 212, 255, 0.3) !important;
+        }
+
+        .leaflet-draw-toolbar a:hover {
+            background-color: rgba(0, 212, 255, 0.3) !important;
+        }
+
+        .day-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 0.5rem;
+        }
+
+        .day-button {
+            padding: 0.6rem;
+            border-radius: 6px;
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            background: transparent;
+            color: #e0e6ed;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .day-button:hover {
+            border-color: rgba(0, 212, 255, 0.5);
+        }
+
+        .day-button.active {
+            border-color: #00d4ff;
+            background: rgba(0, 212, 255, 0.2);
+            color: #00d4ff;
+        }
+
+        @media (max-width: 1400px) {
+            .main-container {
+                flex-direction: column;
+            }
+
+            .left-panel {
+                width: 100%;
+                height: 50%;
+            }
+
+            .right-panel {
+                width: 100%;
+                height: 50%;
+            }
+
+            .charts-container {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback } = React;
+
+        // Utility function to extract hour from time string
+        const getHourFromTimeString = (timeStr) => {
+            if (!timeStr) return 0;
+            const match = timeStr.match(/(\d+):/);
+            return match ? parseInt(match[1], 10) : 0;
+        };
+
+        // Utility function to create hexbin aggregation
+        const createHexbins = (data, cellSize = 0.003) => {
+            const hexbins = {};
+            
+            data.forEach(point => {
+                const latBin = Math.round(point.lat / cellSize) * cellSize;
+                const lonBin = Math.round(point.lon / cellSize) * cellSize;
+                const key = `${latBin},${lonBin}`;
+                
+                if (!hexbins[key]) {
+                    hexbins[key] = { lat: latBin, lon: lonBin, count: 0 };
+                }
+                hexbins[key].count++;
+            });
+            
+            return Object.values(hexbins);
+        };
+
+        // Main Dashboard Component
+        function StadiumDashboard() {
+            const [data, setData] = useState([]);
+            const [filteredData, setFilteredData] = useState([]);
+            const [loading, setLoading] = useState(false);
+            const [dataLoaded, setDataLoaded] = useState(false);
+            const [error, setError] = useState(null);
+            
+            const [hourFilter, setHourFilter] = useState([0, 23]);
+            const [dayFilter, setDayFilter] = useState(null);
+            const [lassoSelection, setLassoSelection] = useState(null);
+            
+            const mapRef = useRef(null);
+            const mapInstanceRef = useRef(null);
+            const drawControlRef = useRef(null);
+            const drawnItemsRef = useRef(null);
+            const hexbinLayerRef = useRef(null);
+            
+            const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+            // Initialize map on mount
+            useEffect(() => {
+                if (!mapRef.current || mapInstanceRef.current) return;
+
+                const map = L.map(mapRef.current).setView([36.09, -115.18], 14);
+                
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+                    maxZoom: 19
+                }).addTo(map);
+
+                mapInstanceRef.current = map;
+
+                // Initialize Leaflet Draw
+                drawnItemsRef.current = new L.FeatureGroup();
+                map.addLayer(drawnItemsRef.current);
+
+                drawControlRef.current = new L.Control.Draw({
+                    draw: {
+                        polygon: true,
+                        polyline: false,
+                        rectangle: false,
+                        circle: false,
+                        marker: false,
+                        circlemarker: false
+                    },
+                    edit: {
+                        featureGroup: drawnItemsRef.current,
+                        remove: true
+                    }
+                });
+                map.addControl(drawControlRef.current);
+
+                map.on('draw:created', (e) => {
+                    const layer = e.layer;
+                    const geoJson = layer.toGeoJSON();
+                    
+                    if (geoJson.geometry.type === 'Polygon') {
+                        const coords = geoJson.geometry.coordinates[0].map(c => [c[1], c[0]]);
+                        setLassoSelection({ coordinates: coords });
+                    }
+                });
+
+                map.on('draw:deleted', () => {
+                    setLassoSelection(null);
+                });
+
+                return () => {
+                    if (mapInstanceRef.current) {
+                        mapInstanceRef.current.remove();
+                        mapInstanceRef.current = null;
+                    }
+                };
+            }, []);
+
+            // Handle CSV file upload
+            const handleFileUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                setLoading(true);
+                setError(null);
+
+                Papa.parse(file, {
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: (results) => {
+                        try {
+                            const parsed = results.data
+                                .map(row => {
+                                    const lat = parseFloat(row['Lat of Visit']);
+                                    const lon = parseFloat(row['Lon of Visit']);
+                                    
+                                    return {
+                                        lat,
+                                        lon,
+                                        date: row['Date'],
+                                        timeOfDay: row['Time of Day'],
+                                        dayOfWeek: row['Day of Week'],
+                                        hour: getHourFromTimeString(row['Time of Day'])
+                                    };
+                                })
+                                .filter(d => !isNaN(d.lat) && !isNaN(d.lon));
+
+                            setData(parsed);
+                            setFilteredData(parsed);
+                            setDataLoaded(true);
+                            setLoading(false);
+                        } catch (err) {
+                            setError('Error parsing CSV data');
+                            setLoading(false);
+                            console.error(err);
+                        }
+                    },
+                    error: (error) => {
+                        setError('Error reading file');
+                        setLoading(false);
+                        console.error(error);
+                    }
+                });
+            };
+
+            // Apply filters
+            useEffect(() => {
+                if (!dataLoaded) return;
+
+                let filtered = data;
+
+                // Hour filter
+                filtered = filtered.filter(d => d.hour >= hourFilter[0] && d.hour <= hourFilter[1]);
+
+                // Day of week filter
+                if (dayFilter) {
+                    filtered = filtered.filter(d => d.dayOfWeek === dayFilter);
+                }
+
+                // Lasso selection
+                if (lassoSelection && lassoSelection.coordinates.length > 0) {
+                    try {
+                        const polygon = turf.polygon([lassoSelection.coordinates]);
+                        filtered = filtered.filter(d => {
+                            const point = turf.point([d.lon, d.lat]);
+                            return turf.booleanPointInPolygon(point, polygon);
+                        });
+                    } catch (e) {
+                        console.warn('Lasso selection error:', e);
+                    }
+                }
+
+                setFilteredData(filtered);
+            }, [data, dataLoaded, hourFilter, dayFilter, lassoSelection]);
+
+            // Update hexbin visualization
+            useEffect(() => {
+                if (!mapInstanceRef.current || filteredData.length === 0) return;
+
+                // Remove existing hexbin layer
+                if (hexbinLayerRef.current) {
+                    mapInstanceRef.current.removeLayer(hexbinLayerRef.current);
+                }
+
+                const hexbins = createHexbins(filteredData, 0.003);
+                const maxCount = Math.max(...hexbins.map(h => h.count));
+
+                const circles = hexbins.map(bin => {
+                    const intensity = bin.count / maxCount;
+                    const hue = Math.round(180 - intensity * 180);
+                    const color = `hsl(${hue}, 100%, 50%)`;
+                    
+                    return L.circleMarker([bin.lat, bin.lon], {
+                        radius: Math.max(3, Math.sqrt(bin.count) * 0.8),
+                        fillColor: color,
+                        color: color,
+                        weight: 1,
+                        opacity: 0.8,
+                        fillOpacity: 0.6
+                    }).bindPopup(`<div style="color: #000">Visits: <strong>${bin.count}</strong></div>`);
+                });
+
+                hexbinLayerRef.current = L.layerGroup(circles).addTo(mapInstanceRef.current);
+            }, [filteredData]);
+
+            // Calculate statistics
+            const stats = {
+                totalVisits: filteredData.length,
+                uniquePoints: new Set(filteredData.map(d => `${d.lat},${d.lon}`)).size,
+                avgVisitsHour: filteredData.length > 0 ? 
+                    Math.round(filteredData.length / 24) : 0
+            };
+
+            const hourlyData = Array(24).fill(0);
+            filteredData.forEach(d => {
+                hourlyData[d.hour]++;
+            });
+
+            const dailyData = {};
+            daysOfWeek.forEach(day => {
+                dailyData[day] = filteredData.filter(d => d.dayOfWeek === day).length;
+            });
+
+            const handleReset = () => {
+                setHourFilter([0, 23]);
+                setDayFilter(null);
+                setLassoSelection(null);
+                if (drawnItemsRef.current && mapInstanceRef.current) {
+                    drawnItemsRef.current.clearLayers();
+                }
+            };
+
+            return (
+                <div className="dashboard">
+                    <div className="header">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div>
+                                <h1>🏟️ Stadium District Visitation</h1>
+                                <p>Interactive geospatial analysis of neighborhood foot traffic • Clark County, Nevada</p>
+                            </div>
+                            {!dataLoaded && (
+                                <div className="file-input-wrapper">
+                                    <label style={{ color: '#a0a7b8', fontSize: '0.85rem', display: 'block', marginBottom: '0.5rem' }}>
+                                        Load CSV Data:
+                                    </label>
+                                    <input
+                                        type="file"
+                                        accept=".csv"
+                                        onChange={handleFileUpload}
+                                        disabled={loading}
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {!dataLoaded ? (
+                        <div className="no-data" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <div>
+                                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📁</div>
+                                <div style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>Upload CSV to begin</div>
+                                <div style={{ fontSize: '0.9rem' }}>Select your September_2025_Example.csv file using the input above</div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="main-container">
+                            <div className="left-panel">
+                                <div className="card map-container">
+                                    <div id="map"></div>
+                                </div>
+                                
+                                <div className="charts-container">
+                                    <div className="chart-card">
+                                        <div className="card-title">Visits by Hour</div>
+                                        <HourlyChart data={hourlyData} />
+                                    </div>
+                                    <div className="chart-card">
+                                        <div className="card-title">Visits by Day</div>
+                                        <DailyChart data={dailyData} days={daysOfWeek} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="right-panel">
+                                <div className="card">
+                                    <div className="card-title">Statistics</div>
+                                    <div className="stats-row">
+                                        <div className="stat-box">
+                                            <div className="stat-value">{stats.totalVisits.toLocaleString()}</div>
+                                            <div className="stat-label">Total Visits</div>
+                                        </div>
+                                        <div className="stat-box">
+                                            <div className="stat-value">{stats.avgVisitsHour}</div>
+                                            <div className="stat-label">Avg per Hour</div>
+                                        </div>
+                                    </div>
+                                    <div className="stats-row">
+                                        <div className="stat-box">
+                                            <div className="stat-value">{stats.uniquePoints.toLocaleString()}</div>
+                                            <div className="stat-label">Unique Locations</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="filters-section">
+                                    <div className="card-title">Filters</div>
+                                    
+                                    <div className="filter-group">
+                                        <label className="filter-label">Time of Day</label>
+                                        <div style={{ marginBottom: '0.5rem' }}>
+                                            <input
+                                                type="range"
+                                                min="0"
+                                                max="23"
+                                                value={hourFilter[0]}
+                                                onChange={(e) => setHourFilter([parseInt(e.target.value), hourFilter[1]])}
+                                            />
+                                        </div>
+                                        <div style={{ marginBottom: '1rem' }}>
+                                            <input
+                                                type="range"
+                                                min="0"
+                                                max="23"
+                                                value={hourFilter[1]}
+                                                onChange={(e) => setHourFilter([hourFilter[0], parseInt(e.target.value)])}
+                                            />
+                                        </div>
+                                        <div className="filter-value">
+                                            {hourFilter[0].toString().padStart(2, '0')}:00 - {hourFilter[1].toString().padStart(2, '0')}:59
+                                        </div>
+                                    </div>
+
+                                    <div className="filter-group">
+                                        <label className="filter-label">Day of Week</label>
+                                        <div className="day-buttons">
+                                            {daysOfWeek.map(day => (
+                                                <button
+                                                    key={day}
+                                                    className={`day-button ${dayFilter === day ? 'active' : ''}`}
+                                                    onClick={() => setDayFilter(dayFilter === day ? null : day)}
+                                                >
+                                                    {day}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="filter-group">
+                                        <label className="filter-label">Spatial Filter</label>
+                                        <div className="tool-info">
+                                            <strong>🎯 Draw Tool Active</strong>
+                                            <br/>Use the polygon tool in the map toolbar to draw custom areas. All visualizations update instantly.
+                                            {lassoSelection && (
+                                                <div style={{ marginTop: '0.5rem', color: '#00d4ff' }}>
+                                                    ✓ Polygon selection active ({filteredData.length} points in selection)
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <button className="reset-button" onClick={handleReset}>
+                                        Reset All Filters
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {loading && (
+                        <div className="loading-message">
+                            <div className="loading-spinner"></div>
+                            <div>Processing CSV data...</div>
+                        </div>
+                    )}
+
+                    {error && (
+                        <div className="loading-message">
+                            <div style={{ color: '#ff6b35', marginBottom: '1rem' }}>⚠️</div>
+                            <div>{error}</div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Hourly Chart Component
+        function HourlyChart({ data }) {
+            const canvasRef = useRef(null);
+            const chartRef = useRef(null);
+
+            useEffect(() => {
+                if (!canvasRef.current) return;
+
+                if (chartRef.current) {
+                    chartRef.current.destroy();
+                }
+
+                const ctx = canvasRef.current.getContext('2d');
+                chartRef.current = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: Array(24).fill(0).map((_, i) => `${i.toString().padStart(2, '0')}:00`),
+                        datasets: [{
+                            label: 'Visits',
+                            data: data,
+                            backgroundColor: 'rgba(0, 212, 255, 0.6)',
+                            borderColor: 'rgba(0, 212, 255, 1)',
+                            borderWidth: 1,
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        indexAxis: 'x',
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: 'rgba(42, 50, 64, 0.9)',
+                                borderColor: 'rgba(0, 212, 255, 0.5)',
+                                borderWidth: 1,
+                                titleColor: '#e0e6ed',
+                                bodyColor: '#a0a7b8'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grid: { color: 'rgba(0, 212, 255, 0.1)' },
+                                ticks: { color: '#a0a7b8' }
+                            },
+                            x: {
+                                grid: { display: false },
+                                ticks: { color: '#a0a7b8', maxRotation: 45, minRotation: 45 }
+                            }
+                        }
+                    }
+                });
+
+                return () => {
+                    if (chartRef.current) {
+                        chartRef.current.destroy();
+                    }
+                };
+            }, [data]);
+
+            return <canvas ref={canvasRef} style={{ height: '100%' }}></canvas>;
+        }
+
+        // Daily Chart Component
+        function DailyChart({ data, days }) {
+            const canvasRef = useRef(null);
+            const chartRef = useRef(null);
+
+            useEffect(() => {
+                if (!canvasRef.current) return;
+
+                if (chartRef.current) {
+                    chartRef.current.destroy();
+                }
+
+                const ctx = canvasRef.current.getContext('2d');
+                chartRef.current = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: days,
+                        datasets: [{
+                            label: 'Visits',
+                            data: days.map(d => data[d] || 0),
+                            backgroundColor: 'rgba(0, 150, 255, 0.6)',
+                            borderColor: 'rgba(0, 150, 255, 1)',
+                            borderWidth: 1,
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: 'rgba(42, 50, 64, 0.9)',
+                                borderColor: 'rgba(0, 212, 255, 0.5)',
+                                borderWidth: 1,
+                                titleColor: '#e0e6ed',
+                                bodyColor: '#a0a7b8'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grid: { color: 'rgba(0, 212, 255, 0.1)' },
+                                ticks: { color: '#a0a7b8' }
+                            },
+                            x: {
+                                grid: { display: false },
+                                ticks: { color: '#a0a7b8' }
+                            }
+                        }
+                    }
+                });
+
+                return () => {
+                    if (chartRef.current) {
+                        chartRef.current.destroy();
+                    }
+                };
+            }, [data, days]);
+
+            return <canvas ref={canvasRef} style={{ height: '100%' }}></canvas>;
+        }
+
+        // Render the app
+        ReactDOM.render(<StadiumDashboard />, document.getElementById('root'));
+    </script>
+</body>
+</html>
