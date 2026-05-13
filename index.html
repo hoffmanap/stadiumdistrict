@@ -2,37 +2,37 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Stadium District | High-Res Grid</title>
+    <title>Stadium District | Quantile Grid</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; background: #0f172a; }
+        body, html { margin: 0; padding: 0; height: 100%; background: #020617; }
         #main { display: flex; height: 100vh; width: 100vw; }
-        #sidebar { width: 340px; background: #111827; border-right: 1px solid #374151; padding: 20px; z-index: 1000; overflow-y: auto; color: white; }
+        #sidebar { width: 340px; background: #0f172a; border-right: 1px solid #1e293b; padding: 20px; z-index: 1000; overflow-y: auto; color: white; }
         #map { flex-grow: 1; z-index: 1; }
-        .legend { background: rgba(17, 24, 39, 0.9); padding: 12px; border-radius: 8px; border: 1px solid #374151; color: white; line-height: 1.5; font-family: sans-serif; font-size: 10px; pointer-events: none; }
-        .legend i { width: 12px; height: 12px; float: left; margin-right: 8px; opacity: 0.8; border-radius: 2px; }
-        input[type=range] { width: 100%; height: 4px; background: #374151; border-radius: 2px; appearance: none; outline: none; }
-        input[type=range]::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; background: #6366f1; border-radius: 50%; cursor: pointer; }
+        .legend { background: rgba(15, 23, 42, 0.95); padding: 12px; border-radius: 8px; border: 1px solid #334155; color: white; font-size: 10px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); pointer-events: none; }
+        .legend i { width: 14px; height: 10px; float: left; margin-right: 8px; opacity: 0.9; border-radius: 1px; }
+        input[type=range] { width: 100%; height: 4px; background: #334155; border-radius: 2px; appearance: none; outline: none; }
+        input[type=range]::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; background: #818cf8; border-radius: 50%; cursor: pointer; }
     </style>
 </head>
 <body>
     <div id="main">
         <aside id="sidebar">
-            <h1 class="text-xl font-black mb-1 italic">STADIUM ANALYTICS</h1>
-            <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-8">Grid Aggregation Tool</p>
+            <h1 class="text-xl font-black mb-1 italic tracking-tight">STADIUM ANALYTICS</h1>
+            <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-8">Quantile Distribution Mode</p>
 
-            <div class="mb-8 p-4 bg-gray-800 rounded-xl border border-gray-700">
-                <label class="block text-[10px] font-bold text-gray-500 uppercase mb-2">Upload September CSV</label>
+            <div class="mb-8 p-4 bg-slate-800/50 rounded-xl border border-slate-700">
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Upload September CSV</label>
                 <input type="file" id="csv-input" accept=".csv" class="text-xs w-full file:bg-indigo-600 file:text-white file:border-0 file:px-3 file:py-1 file:rounded-md cursor-pointer" />
             </div>
 
             <div class="space-y-8">
                 <div>
-                    <div class="flex justify-between text-[10px] font-bold text-gray-400 uppercase mb-3">
-                        <span>Time Window</span>
+                    <div class="flex justify-between text-[10px] font-bold text-slate-400 uppercase mb-3">
+                        <span>Time Range</span>
                         <span id="time-label" class="text-indigo-400">0:00 - 23:59</span>
                     </div>
                     <div class="space-y-4">
@@ -42,13 +42,13 @@
                 </div>
 
                 <div>
-                    <label class="text-[10px] font-bold text-gray-400 uppercase mb-3 block">Day Filter</label>
+                    <label class="text-[10px] font-bold text-slate-400 uppercase mb-3 block">Day Filter</label>
                     <div class="grid grid-cols-4 gap-1" id="day-grid"></div>
                 </div>
 
-                <div class="bg-gray-900/50 p-4 rounded-xl border border-gray-700">
+                <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800">
                     <div id="vis-count" class="text-2xl font-mono font-bold text-white">0</div>
-                    <div class="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Points Aggregated</div>
+                    <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Points Analyzed</div>
                 </div>
             </div>
         </aside>
@@ -65,22 +65,24 @@
         let activeDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         let gridLayer = L.layerGroup().addTo(map);
 
-        // Multi-stop Color Palette (Blue -> Yellow -> Red)
-        const colors = ['#313695', '#4575b4', '#74add1', '#abd9e9', '#ffffbf', '#fee090', '#fdae61', '#f46d43', '#d73027', '#a50026'];
+        // Kepler-inspired multi-stop palette
+        const colors = ['#313695', '#4575b4', '#74add1', '#abd9e9', '#e0f3f8', '#ffffbf', '#fee090', '#fdae61', '#f46d43', '#d73027', '#a50026'];
 
         const legend = L.control({position: 'bottomright'});
         legend.onAdd = function () {
             const div = L.DomUtil.create('div', 'legend');
-            div.innerHTML = '<b class="uppercase tracking-widest mb-2 block">Visitation Intensity</b>';
-            const labels = ['Low', '', '', '', '', '', '', '', '', 'High'];
+            div.innerHTML = '<b class="uppercase tracking-widest mb-2 block text-indigo-300">Relative Activity</b>';
+            div.innerHTML += '<div class="space-y-1">';
             for (let i = 0; i < colors.length; i++) {
-                div.innerHTML += `<i style="background:${colors[i]}"></i> ${labels[i]}<br>`;
+                const label = i === 0 ? 'Lowest Decile' : (i === colors.length - 1 ? 'Highest Decile' : '');
+                div.innerHTML += `<div><i style="background:${colors[i]}"></i> <span class="text-slate-400">${label}</span></div>`;
             }
+            div.innerHTML += '</div>';
             return div;
         };
         legend.addTo(map);
 
-        const grid = document.getElementById('day-grid');
+        const gridButtons = document.getElementById('day-grid');
         activeDays.forEach(day => {
             const b = document.createElement('button');
             b.innerText = day; b.id = 'btn-' + day;
@@ -88,14 +90,14 @@
             b.onclick = () => {
                 if (activeDays.includes(day)) {
                     activeDays = activeDays.filter(d => d !== day);
-                    b.className = 'py-2 text-[9px] font-bold rounded bg-gray-800 text-gray-500';
+                    b.className = 'py-2 text-[9px] font-bold rounded bg-slate-800 text-slate-500';
                 } else {
                     activeDays.push(day);
                     b.className = 'py-2 text-[9px] font-bold rounded bg-indigo-600 text-white';
                 }
                 render();
             };
-            grid.appendChild(b);
+            gridButtons.appendChild(b);
         });
 
         document.getElementById('csv-input').onchange = (e) => {
@@ -133,9 +135,9 @@
 
             if (filtered.length === 0) return;
 
-            // Square Grid Aggregation (Snapping)
+            // 1. Grid Aggregation
             const bins = {};
-            const res = 0.0004; // High-res grid size (approx 40-50m)
+            const res = 0.0003; // Even tighter resolution for Kepler feel
             
             filtered.forEach(p => {
                 const qx = Math.floor(p.lng / res) * res;
@@ -145,21 +147,31 @@
                 bins[key].count++;
             });
 
-            const counts = Object.values(bins).map(b => b.count).sort((a, b) => a - b);
-            const maxC = counts[counts.length - 1];
+            const binArray = Object.values(bins);
+            
+            // 2. QUANTILE BREAKS CALCULATION
+            // Sort bins by their count
+            const sortedCounts = binArray.map(b => b.count).sort((a, b) => a - b);
+            
+            function getQuantileColor(count) {
+                if (count === 0) return colors[0];
+                // Find where this count sits in the sorted population
+                const idx = sortedCounts.indexOf(count);
+                const percentile = idx / sortedCounts.length;
+                const colorIdx = Math.min(Math.floor(percentile * colors.length), colors.length - 1);
+                return colors[colorIdx];
+            }
 
-            Object.values(bins).forEach(b => {
-                // Determine color index (0-9)
-                const colorIdx = Math.min(Math.floor((b.count / maxC) * colors.length), colors.length - 1);
-                
-                // Draw square bounds
+            // 3. Render Rectangles
+            binArray.forEach(b => {
+                const color = getQuantileColor(b.count);
                 const bounds = [[b.lat, b.lng], [b.lat + res, b.lng + res]];
                 
                 L.rectangle(bounds, {
-                    fillColor: colors[colorIdx],
-                    color: '#fff',
-                    weight: 0.2, // Thin grid lines
-                    fillOpacity: 0.7
+                    fillColor: color,
+                    color: color,
+                    weight: 0.1,
+                    fillOpacity: 0.8
                 }).addTo(gridLayer);
             });
         }
