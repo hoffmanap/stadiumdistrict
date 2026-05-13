@@ -2,138 +2,127 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stadium District Visitation Dashboard</title>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://unpkg.com/deck.gl@latest/dist.min.js"></script>
-    <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
+    <title>Stadium District Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body { margin: 0; padding: 0; font-family: sans-serif; overflow: hidden; }
-        #container { display: flex; height: 100vh; width: 100vw; }
-        #sidebar { width: 400px; background: #f8fafc; border-right: 1px solid #e2e8f0; padding: 20px; overflow-y: auto; z-index: 10; }
-        #map-container { flex-grow: 1; position: relative; background: #0f172a; }
-    </style>
 </head>
-<body>
-    <div id="root"></div>
+<body class="bg-slate-900 text-white overflow-hidden">
 
-    <script type="text/babel">
-        const { useState, useMemo, useEffect } = React;
-        const { DeckGL, HexagonLayer, SelectionLayer } = deck;
-        const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } = Recharts;
+    <div id="error-log" class="fixed top-0 left-0 w-full bg-red-600 text-white text-xs p-1 z-[9999] hidden"></div>
 
-        // Configuration for Clark County Stadium District
-        const INITIAL_VIEW_STATE = {
-            longitude: -115.1833,
-            latitude: 36.0909,
-            zoom: 14,
-            pitch: 45,
-            bearing: 0
-        };
+    <div class="flex h-screen w-screen">
+        <aside class="w-80 bg-white text-slate-800 p-6 shadow-2xl z-10 flex flex-col">
+            <h1 class="text-xl font-black italic tracking-tighter text-indigo-700">STADIUM ANALYTICS</h1>
+            <p class="text-[10px] font-bold text-slate-400 uppercase mb-6">Internal Tracking Tool</p>
 
-        const Dashboard = () => {
-            const [data, setData] = useState([]);
-            const [filteredData, setFilteredData] = useState([]);
-            const [hourRange, setHourRange] = useState([0, 23]);
-            const [selectedPolygon, setSelectedPolygon] = useState(null);
+            <div class="space-y-4">
+                <div class="p-4 bg-slate-100 rounded-lg border border-slate-200">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">1. Load Local Data</label>
+                    <input type="file" id="csv-input" accept=".csv" class="text-xs w-full cursor-pointer file:bg-indigo-600 file:text-white file:border-0 file:px-2 file:py-1 file:rounded" />
+                </div>
 
-            // Fetch or load data (Placeholder for your CSV/JSON)
-            useEffect(() => {
-                // In a production scenario, you would parse your OneDrive CSV here
-                // mockData generation for demonstration:
-                const mockData = Array.from({ length: 2000 }, () => ({
-                    lat: 36.0909 + (Math.random() - 0.5) * 0.02,
-                    lng: -115.1833 + (Math.random() - 0.5) * 0.02,
-                    hour: Math.floor(Math.random() * 24),
-                    day: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][Math.floor(Math.random() * 7)],
-                    timestamp: new Date(2025, 0, Math.random() * 365).getTime()
-                }));
-                setData(mockData);
-                setFilteredData(mockData);
-            }, []);
-
-            // Handle Filtering Logic
-            useEffect(() => {
-                let filtered = data.filter(d => d.hour >= hourRange[0] && d.hour <= hourRange[1]);
-                
-                if (selectedPolygon) {
-                    // Logic for point-in-polygon filtering would go here
-                }
-                
-                setFilteredData(filtered);
-            }, [hourRange, selectedPolygon, data]);
-
-            const layers = [
-                new HexagonLayer({
-                    id: 'visitation-hex',
-                    data: filteredData,
-                    getPosition: d => [d.lng, d.lat],
-                    radius: 50,
-                    elevationScale: 4,
-                    extruded: true,
-                    pickable: true,
-                    colorRange: [
-                        [255, 255, 178], [254, 217, 118], [254, 178, 76],
-                        [253, 141, 60], [240, 59, 32], [189, 0, 38]
-                    ]
-                })
-            ];
-
-            // Aggregate data for charts
-            const timeOfDayData = useMemo(() => {
-                const bins = Array(24).fill(0).map((_, i) => ({ name: `${i}:00`, value: 0 }));
-                filteredData.forEach(d => bins[d.hour].value++);
-                return bins;
-            }, [filteredData]);
-
-            return (
-                <div id="container">
-                    <div id="sidebar">
-                        <h1 className="text-xl font-bold mb-4">Stadium District Analytics</h1>
-                        
-                        <div className="mb-8">
-                            <label className="block text-sm font-medium mb-2">Time of Day Filter (00:00 - 23:00)</label>
-                            <input 
-                                type="range" min="0" max="23" 
-                                className="w-full"
-                                onChange={(e) => setHourRange([parseInt(e.target.value), 23])}
-                            />
-                        </div>
-
-                        <div className="h-64 mb-8">
-                            <h3 className="text-sm font-semibold mb-2">Visitation by Hour</h3>
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={timeOfDayData}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="name" fontSize={10} />
-                                    <YAxis fontSize={10} />
-                                    <Tooltip />
-                                    <Bar dataKey="value" fill="#4f46e5" />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-
-                        <div className="text-xs text-gray-500 mt-4">
-                            Use the Lasso tool (Ctrl + Drag) to filter by custom area.
-                        </div>
+                <div id="ui-controls" class="hidden space-y-4">
+                    <div class="bg-indigo-700 p-4 rounded-xl text-white">
+                        <div id="vis-count" class="text-3xl font-black">0</div>
+                        <div class="text-[10px] uppercase opacity-60">Visits Displayed</div>
                     </div>
 
-                    <div id="map-container">
-                        <DeckGL
-                            initialViewState={INITIAL_VIEW_STATE}
-                            controller={true}
-                            layers={layers}
-                        />
+                    <div>
+                        <label class="text-xs font-bold text-slate-400 uppercase">Filter: Hour of Day</label>
+                        <input type="range" id="hour-filter" min="0" max="23" value="0" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer mt-2" />
+                        <div id="hour-display" class="text-right text-xs font-mono mt-1 text-slate-500">0:00+</div>
                     </div>
                 </div>
-            );
+            </div>
+            
+            <div class="mt-auto pt-4 border-t border-slate-100">
+                <p class="text-[9px] text-slate-400 leading-tight">
+                    If map is blank, ensure your network allows <strong>openstreetmap.org</strong> and <strong>cdnjs.cloudflare.com</strong>.
+                </p>
+            </div>
+        </aside>
+
+        <div id="map" class="flex-1 bg-slate-800"></div>
+    </div>
+
+    <script>
+        // Diagnostic Logger
+        window.onerror = function(msg) {
+            const log = document.getElementById('error-log');
+            log.innerText = "Script Error: " + msg;
+            log.classList.remove('hidden');
         };
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<Dashboard />);
+        // Initialize Map with fallback coordinates
+        const map = L.map('map', { zoomControl: false }).setView([36.091, -115.183], 13);
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+        // Standard OpenStreetMap tiles (most likely to be allowed by security filters)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OSM'
+        }).addTo(map);
+
+        let points = [];
+        let mapLayer = L.layerGroup().addTo(map);
+
+        const input = document.getElementById('csv-input');
+        const controls = document.getElementById('ui-controls');
+        const countLabel = document.getElementById('vis-count');
+        const slider = document.getElementById('hour-filter');
+
+        input.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            Papa.parse(file, {
+                header: true,
+                dynamicTyping: true,
+                complete: function(results) {
+                    points = results.data
+                        .filter(r => r['Lat of Visit'] && r['Lon of Visit'])
+                        .map(r => {
+                            let h = 0;
+                            const time = r['Time of Day'] || "";
+                            const m = time.match(/(\d+):/);
+                            if (m) {
+                                h = parseInt(m[1]);
+                                if (time.includes('PM') && h !== 12) h += 12;
+                                if (time.includes('AM') && h === 12) h = 0;
+                            }
+                            return { lat: r['Lat of Visit'], lng: r['Lon of Visit'], hr: h };
+                        });
+                    
+                    controls.classList.remove('hidden');
+                    refresh(0);
+                }
+            });
+        });
+
+        function refresh(h) {
+            mapLayer.clearLayers();
+            let c = 0;
+            points.forEach(p => {
+                if (p.hr >= h) {
+                    c++;
+                    // Render 10% of points for high performance
+                    if (c % 10 === 0) {
+                        L.circleMarker([p.lat, p.lng], {
+                            radius: 2,
+                            fillColor: '#4f46e5',
+                            color: '#fff',
+                            weight: 0.5,
+                            fillOpacity: 0.5
+                        }).addTo(mapLayer);
+                    }
+                }
+            });
+            countLabel.innerText = (c).toLocaleString();
+            document.getElementById('hour-display').innerText = h + ":00+";
+        }
+
+        slider.addEventListener('input', e => refresh(parseInt(e.target.value)));
     </script>
 </body>
 </html>
