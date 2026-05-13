@@ -1,10 +1,8 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Stadium District Dashboard</title>
-    <!-- Using only the most essential, bulletproof libraries -->
+    <title>Stadium District Hotspot Tool</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
@@ -14,7 +12,8 @@
         #main { display: flex; height: 100vh; width: 100vw; }
         #sidebar { width: 340px; background: #1e293b; border-right: 1px solid #334155; padding: 20px; z-index: 1000; overflow-y: auto; color: white; }
         #map { flex-grow: 1; z-index: 1; }
-        .hex-bin { transition: all 0.2s; pointer-events: none; }
+        input[type=range] { width: 100%; height: 6px; background: #334155; border-radius: 5px; appearance: none; outline: none; }
+        input[type=range]::-webkit-slider-thumb { appearance: none; width: 16px; height: 16px; background: #6366f1; border-radius: 50%; cursor: pointer; border: 2px solid #fff; }
     </style>
 </head>
 <body>
@@ -24,7 +23,7 @@
             <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-6">Internal Hotspot Tool</p>
 
             <div class="mb-6 p-4 bg-slate-800 rounded-lg border border-slate-700">
-                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Upload September CSV</label>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Upload Data</label>
                 <input type="file" id="csv-input" accept=".csv" class="text-xs w-full cursor-pointer file:bg-indigo-600 file:text-white file:border-0 file:px-2 file:py-1 file:rounded" />
             </div>
 
@@ -39,8 +38,8 @@
                         <div class="flex justify-between text-[10px] font-bold text-slate-400 uppercase mb-2">
                             <span>Time: <span id="time-label" class="text-white">0:00 - 23:59</span></span>
                         </div>
-                        <input type="range" id="start-h" min="0" max="23" value="0" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500 mb-2">
-                        <input type="range" id="end-h" min="0" max="23" value="23" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+                        <input type="range" id="start-h" min="0" max="23" value="0" class="mb-2">
+                        <input type="range" id="end-h" min="0" max="23" value="23">
                     </div>
 
                     <div>
@@ -62,20 +61,16 @@
     </div>
 
     <script>
-        // --- 1. SETUP MAP ---
         const map = L.map('map', { zoomControl: false }).setView([36.091, -115.183], 14);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png', {
             attribution: 'CartoDB'
         }).addTo(map);
 
-        // SVG Overlay for Hexagons (Native Leaflet approach, no plugins)
-        const svgLayer = L.svg({clickable: false}).addTo(map);
-        const g = d3.select(svgLayer.getElement()).append('g');
-
         let rawData = [];
         let activeDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        let overlayLayer = L.layerGroup().addTo(map);
 
-        // --- 2. BUILD UI ---
+        // Build Day Buttons
         const grid = document.getElementById('day-grid');
         activeDays.forEach(day => {
             const b = document.createElement('button');
@@ -95,7 +90,6 @@
             grid.appendChild(b);
         });
 
-        // --- 3. CSV LOGIC ---
         document.getElementById('csv-input').onchange = (e) => {
             Papa.parse(e.target.files[0], {
                 header: true,
@@ -103,33 +97,37 @@
                 skipEmptyLines: true,
                 complete: (res) => {
                     rawData = res.data.map(r => {
+                        // FIX: Aggressive Header Cleaning
                         const clean = {};
-                        Object.keys(r).forEach(k => clean[k.trim()] = r[k]);
+                        Object.keys(r).forEach(k => {
+                            const cleanKey = k.trim().replace(/[^\x20-\x7E]/g, ''); 
+                            clean[cleanKey] = r[k];
+                        });
+
+                        // Extract Hour (handling AM/PM)
                         let hr = 0;
-                        const t = clean['Time of Day'] || "";
-                        const m = t.match(/(\d+):/);
-                        if (m) {
-                            hr = parseInt(m[1]);
-                            if (t.includes('PM') && hr !== 12) hr += 12;
-                            if (t.includes('AM') && hr === 12) hr = 0;
+                        const tStr = String(clean['Time of Day'] || "");
+                        const match = tStr.match(/(\d+):/);
+                        if (match) {
+                            hr = parseInt(match[1]);
+                            if (tStr.toUpperCase().includes('PM') && hr !== 12) hr += 12;
+                            if (tStr.toUpperCase().includes('AM') && hr === 12) hr = 0;
                         }
-                        return { lat: clean['Lat of Visit'], lng: clean['Lon of Visit'], hr, day: clean['Day of Week'] };
+                        
+                        return { 
+                            lat: clean['Lat of Visit'], 
+                            lng: clean['Lon of Visit'], 
+                            hr: hr, 
+                            day: String(clean['Day of Week']).trim() 
+                        };
                     }).filter(r => r.lat && r.lng);
                     render();
                 }
             });
         };
 
-        // --- 4. HEXBIN LOGIC (Custom math to avoid plugin failure) ---
-        function getHexBin(lng, lat, radius) {
-            const x = lng * 1000; // Simplified projection
-            const y = lat * 1000;
-            const q = Math.round(x / radius);
-            const r = Math.round(y / radius);
-            return `${q},${r}`;
-        }
-
         function render() {
+            overlayLayer.clearLayers();
             const start = parseInt(document.getElementById('start-h').value);
             const end = parseInt(document.getElementById('end-h').value);
             const minH = Math.min(start, end);
@@ -139,46 +137,39 @@
                 d.hr >= minH && d.hr <= maxH && activeDays.includes(d.day)
             );
 
-            // Update Labels
             document.getElementById('vis-count').innerText = filtered.length.toLocaleString();
             document.getElementById('time-label').innerText = `${minH}:00 - ${maxH}:59`;
 
-            // Clear previous bins
-            g.selectAll('*').remove();
-
             if (filtered.length === 0) return;
 
-            // Aggregation
+            // Manual Hex-like Grid Aggregation
             const bins = {};
+            const res = 0.001; // Grid resolution (approx 100m)
+            
             filtered.forEach(p => {
-                const key = getHexBin(p.lng, p.lat, 0.4); // Adjust resolution here
-                if (!bins[key]) bins[key] = { count: 0, lat: p.lat, lng: p.lng };
+                const qx = Math.round(p.lng / res) * res;
+                const qy = Math.round(p.lat / res) * res;
+                const key = `${qx},${qy}`;
+                if (!bins[key]) bins[key] = { count: 0, lat: qy, lng: qx };
                 bins[key].count++;
             });
 
-            const counts = Object.values(bins).map(b => b.count);
-            const maxCount = Math.max(...counts);
+            const maxC = Math.max(...Object.values(bins).map(b => b.count));
 
-            const colorScale = (val) => {
-                const ratio = val / maxCount;
-                if (ratio < 0.3) return '#3b82f6'; // Blue
-                if (ratio < 0.7) return '#facc15'; // Yellow
-                return '#ef4444'; // Red
-            };
-
-            Object.values(bins).forEach(bin => {
-                const point = map.latLngToLayerPoint([bin.lat, bin.lng]);
-                g.append('circle')
-                    .attr('cx', point.x)
-                    .attr('cy', point.y)
-                    .attr('r', 8) // Visual bin size
-                    .attr('fill', colorScale(bin.count))
-                    .attr('fill-opacity', 0.6)
-                    .attr('class', 'hex-bin');
+            Object.values(bins).forEach(b => {
+                const ratio = b.count / maxC;
+                const color = ratio < 0.3 ? '#3b82f6' : (ratio < 0.7 ? '#facc15' : '#ef4444');
+                
+                L.circleMarker([b.lat, b.lng], {
+                    radius: 7,
+                    fillColor: color,
+                    color: '#fff',
+                    weight: 0.5,
+                    fillOpacity: 0.6
+                }).addTo(overlayLayer);
             });
         }
 
-        map.on('moveend', render);
         document.getElementById('start-h').oninput = render;
         document.getElementById('end-h').oninput = render;
     </script>
